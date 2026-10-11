@@ -48,6 +48,11 @@ If a screenshot shows the wrong state, iterate with targeted navigation or inter
 
 Never use a Playwright MCP server (or similar browser-automation MCP) for this — always prefer the CLI/script approach above.
 
+Hydration gotchas (cost real time, learn from them):
+- `allowedDevOrigins` in `next.config.ts` must cover the work-host URL, or the dev server blocks its own client resources and the page never hydrates: buttons stay dead even though clicks reach the DOM. It currently uses the wildcard `**.prod-runtime.all-hands.dev`.
+- Do NOT stub `Math.random` in `page.addInitScript` to make a page deterministic. Overriding it before the Next.js dev client boots breaks hydration (same dead-click symptom). Seed randomness only after the app is interactive, or read the value under test from the rendered DOM instead.
+- A slow first paint in `next dev` can look like a dead page; poll by actually clicking until state changes before concluding a click handler is broken.
+
 Retention of screenshots:
 Place the screenshots into the folder <before-after/name-of-issue/before-iso-date.png> and <before-after/name-of-issue/after-iso-date.png>
 
@@ -67,3 +72,23 @@ What should never be missing:
 
 - a link to a working preview-URL (remember that localhost is not reachable from the outside)
 - before/after screenshots in the PR-description if needed.
+
+## Apps in this repo
+
+Apps live as routes under `src/app/<app>/` and are registered in `src/data/apps.ts`.
+The route needs `output: "export"`-friendly, client-rendered React.
+
+### ShadowTales (`/shadowtales`)
+
+A personalisable, interactive shadow theatre. See [SHADOWTALES.md](SHADOWTALES.md).
+
+- Domain code in `src/lib/shadowtales/` (types, style presets, demo stories,
+  rule-based generator, "what-if" variants, localStorage store).
+- UI in `src/components/shadowtales/` (TheaterPlayer, SceneRenderer,
+  CharacterSilhouette, CharacterEditor, StoryForm, Timeline, StyleSelector,
+  SceneEditor, WhatIfPanel, StageBackdrop, StageEffects).
+- Theatre CSS animations live in `src/app/shadowtales/shadowtales.css`.
+- State is in the URL (`?view=`, `?story=`, `?scene=`), so pages are reproducible
+  for screenshots and Playwright.
+- Verify flows with Playwright scripts; the demo and an interactive example are
+  seeded into localStorage on first load.
