@@ -8,8 +8,8 @@ interface AppCardProps {
 
 export function AppCard({ app }: AppCardProps) {
   return (
-    <article className="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/60 shadow-sm ring-1 ring-white/5 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl hover:shadow-black/40">
-      <div className="relative h-40 overflow-hidden bg-zinc-800 sm:h-44">
+    <article className="group flex flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/70 shadow-sm ring-1 ring-black/5 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-2xl hover:shadow-black/10 dark:border-white/10 dark:bg-zinc-900/60 dark:ring-white/5 dark:hover:border-white/20 dark:hover:shadow-black/40">
+      <div className="relative h-40 overflow-hidden bg-zinc-200 sm:h-44 dark:bg-zinc-800">
         <Image
           src={app.card}
           alt={`${app.name} cover`}
@@ -21,7 +21,7 @@ export function AppCard({ app }: AppCardProps) {
 
       <div className="flex flex-1 flex-col gap-4 p-5">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/10">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/10 dark:bg-white/10">
             <Image
               src={app.icon}
               alt=""
@@ -31,25 +31,25 @@ export function AppCard({ app }: AppCardProps) {
             />
           </span>
           <div className="min-w-0">
-            <h3 className="truncate font-semibold text-white">{app.name}</h3>
+            <h3 className="truncate font-semibold text-zinc-900 dark:text-white">{app.name}</h3>
             <a
               href={app.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="block truncate text-sm text-zinc-400 transition-colors hover:text-zinc-200"
+              className="block truncate text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
               {app.domain}
             </a>
           </div>
         </div>
 
-        <p className="text-sm leading-6 text-zinc-400">{app.slogan}</p>
+        <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{app.slogan}</p>
 
         <a
           href={app.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-white transition-colors hover:text-zinc-300"
+          className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-zinc-900 transition-colors hover:text-zinc-600 dark:text-white dark:hover:text-zinc-300"
         >
           Open app
           <ArrowUpRightIcon className="h-4 w-4" />
