@@ -1,65 +1,69 @@
 "use client";
 
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { encodeGame, type GamePlayer, type GameState } from "@/lib/game-codec";
 
-export type MoveKind = "move" | "ladder" | "snake";
-
-/** One roll of the dice, as the share grid needs to see it. */
-export interface ShareMove {
-  roll: number;
-  kind: MoveKind;
-  square: number;
-}
+/** Seat markers, in the same order as the player colours. */
+export const SEAT = ["🔴", "🔵", "🟢", "🟡"];
+const MAX_GLYPHS = 30;
 
 interface Props {
-  moves: ShareMove[];
-  /** Furthest square reached this run. */
-  best: number;
+  players: GamePlayer[];
+  turn: number;
   won: boolean;
-  /** Squares on the board (100). */
-  total: number;
+  winner: number | null;
 }
 
-const GLYPH: Record<MoveKind, string> = { move: "🟥", ladder: "🪜", snake: "🐍" };
-const MAX_GLYPHS = 40;
-const FINISH = "🏆";
+const GLYPH: Record<string, string> = { m: "🟥", l: "🪜", s: "🐍" };
 
-function buildGrid(moves: ShareMove[]) {
-  const shown = moves.slice(-MAX_GLYPHS).map((m) => GLYPH[m.kind]);
-  return shown.join("");
+const glyphRow = (p: GamePlayer) =>
+  p.glyphs
+    .slice(-MAX_GLYPHS)
+    .split("")
+    .map((c) => GLYPH[c] ?? "🟥")
+    .join("");
+
+function standings(players: GamePlayer[]) {
+  return [...players]
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => b.p.square - a.p.square)
+    .map(({ p, i }, rank) => `${rank + 1}. ${SEAT[i]} ${p.name} — square ${p.square}`);
 }
 
-function buildShareText(moves: ShareMove[], best: number, won: boolean, total: number, url: string) {
-  if (moves.length === 0) {
+function buildShareText(players: GamePlayer[], won: boolean, winner: number | null, url: string) {
+  if (players.every((p) => p.rolls === 0)) {
     return [
-      "🎲🇦🇹 Austrian Snakes & Ladders",
-      "The board game where you can't lose the Austrian way of life.",
-      "I haven't rolled yet. Alpine luck is loading…",
+      "🎲🇦🇹 Austrian Snakes & Ladders — High Roller Edition",
+      `${players.length} players, one table, casino lights.`,
+      "No rolls yet. Pull up a chair and roll the dice.",
       "",
-      `Play free → ${url}`,
+      `Take a seat → ${url}`,
     ].join("\n");
   }
 
-  const ladders = moves.filter((m) => m.kind === "ladder").length;
-  const snakes = moves.filter((m) => m.kind === "snake").length;
-  const grid = buildGrid(moves);
+  const rows = players.map((p, i) => `${SEAT[i]} ${p.name} ${glyphRow(p) || "—"}`);
+  const board = standings(players).join("\n");
 
-  if (won) {
+  if (won && winner !== null) {
+    const w = players[winner];
     return [
-      grid,
-      `${FINISH} Austrian Snakes & Ladders — reached square ${total} in ${moves.length} rolls!`,
-      `${ladders} ladder${ladders === 1 ? "" : "s"} up, ${snakes} snake${snakes === 1 ? "" : "s"} down. Free, obviously.`,
+      rows.join("\n"),
       "",
-      `Can you climb it faster? → ${url}`,
+      `🏆 ${SEAT[winner]} ${w.name} takes the pot in ${w.rolls} rolls!`,
+      board,
+      `${w.ladders} ladder${w.ladders === 1 ? "" : "s"} up, ${w.snakes} snake${w.snakes === 1 ? "" : "s"} down. Free, obviously.`,
+      "",
+      `Beat that → ${url}`,
     ].join("\n");
   }
 
   return [
-    grid,
-    `🎲🇦🇹 Austrian Snakes & Ladders — reached square ${best}/${total} in ${moves.length} rolls.`,
-    `${ladders} ladder${ladders === 1 ? "" : "s"} up, ${snakes} snake${snakes === 1 ? "" : "s"} down. Free to play.`,
+    rows.join("\n"),
     "",
-    `Beat my run → ${url}`,
+    `🎲🇦🇹 Austrian Snakes & Ladders — in progress (${players.length} players)`,
+    board,
+    "",
+    `Jump in → ${url}`,
   ].join("\n");
 }
 
@@ -89,57 +93,43 @@ async function copyText(text: string) {
 
 const noopSubscribe = () => () => {};
 
-/** Browser-only location, read without an effect and without breaking hydration. */
-function useLocationKey() {
+/** Browser-only origin, read without an effect and without breaking hydration. */
+function useOrigin() {
   return useSyncExternalStore(
     noopSubscribe,
-    () => `${window.location.origin}|${window.location.search}`,
-    () => "|",
+    () => window.location.origin,
+    () => "",
   );
 }
 
-export function GameShare({ moves, best, won, total }: Props) {
+export function GameShare({ players, turn, won, winner }: Props) {
   const [status, setStatus] = useState<"idle" | "copied" | "shared" | "failed">("idle");
-  const locationKey = useLocationKey();
+  const origin = useOrigin();
 
-  const { origin, challengeFrom, challengeAt } = useMemo(() => {
-    const sep = locationKey.indexOf("|");
-    const o = locationKey.slice(0, sep);
-    const params = new URLSearchParams(locationKey.slice(sep + 1));
-    const at = params.get("challenge");
-    const from = params.get("from");
-    return {
-      origin: o,
-      challengeFrom: from ? from.slice(0, 24) : null,
-      challengeAt: at && Number.isFinite(Number(at)) ? Number(at) : null,
-    };
-  }, [locationKey]);
+  const inviteUrl = useMemo(() => {
+    const state: GameState = { players, turn, winner };
+    return `${origin}/snakes-and-ladders?g=${encodeGame(state)}`;
+  }, [origin, players, turn, winner]);
 
-  const playUrl = `${origin}/snakes-and-ladders`;
   const shareText = useMemo(
-    () => buildShareText(moves, best, won, total, playUrl),
-    [moves, best, won, total, playUrl],
+    () => buildShareText(players, won, winner, inviteUrl),
+    [players, won, winner, inviteUrl],
   );
 
-  const challengeText = useMemo(() => {
-    const target = Math.max(best, 1);
-    return [
-      `🎲 I dare you to beat my Austrian Snakes & Ladders run — square ${target}/${total}.`,
-      "Watch out: one wrong roll and a snake drops you right back.",
-      "",
-      `Accept the challenge → ${playUrl}?challenge=${target}`,
-    ].join("\n");
-  }, [best, playUrl, total]);
-
+  const inviter = players[0]?.name ?? "The table";
   const flash = useCallback((s: typeof status) => {
     setStatus(s);
     window.setTimeout(() => setStatus("idle"), 2200);
   }, []);
 
-  const onShare = useCallback(async () => {
+  const onInvite = useCallback(async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Austrian Snakes & Ladders", text: shareText, url: playUrl });
+        await navigator.share({
+          title: "Austrian Snakes & Ladders — join my table",
+          text: shareText,
+          url: inviteUrl,
+        });
         flash("shared");
         return;
       } catch {
@@ -147,16 +137,15 @@ export function GameShare({ moves, best, won, total }: Props) {
       }
     }
     flash((await copyText(shareText)) ? "copied" : "failed");
-  }, [flash, playUrl, shareText]);
+  }, [flash, inviteUrl, shareText]);
 
-  const onChallenge = useCallback(async () => {
-    flash((await copyText(challengeText)) ? "copied" : "failed");
-  }, [challengeText, flash]);
+  const onCopyLink = useCallback(async () => {
+    flash((await copyText(inviteUrl)) ? "copied" : "failed");
+  }, [flash, inviteUrl]);
 
-  const target = Math.max(best, 1);
   const label =
     status === "copied"
-      ? "Copied! Paste it anywhere."
+      ? "Invite copied! Send it to a friend."
       : status === "shared"
         ? "Shared!"
         : status === "failed"
@@ -164,20 +153,17 @@ export function GameShare({ moves, best, won, total }: Props) {
           : null;
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900/50 p-5 backdrop-blur-md">
-      {challengeAt !== null && (
-        <p className="mb-4 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-center text-sm text-amber-200">
-          🥊 {challengeFrom ? `${challengeFrom} dares you` : "You've been dared"} to reach{" "}
-          <span className="font-semibold">square {challengeAt}</span>. Mind the snakes.
-        </p>
-      )}
-
+    <div className="w-full max-w-[520px] rounded-2xl border border-amber-300/20 bg-zinc-900/50 p-5 backdrop-blur-md">
       <div className="flex items-baseline justify-between">
-        <h2 className="font-semibold text-white">Share your run</h2>
-        <span className="text-sm text-zinc-400">
-          square {best}/{total}
-        </span>
+        <h2 className="font-semibold text-white">Invite players</h2>
+        <span className="text-sm text-zinc-400">{players.length} at the table</span>
       </div>
+
+      <p className="mt-2 text-sm text-zinc-300">
+        Send this link to a friend. Opening it drops them into{" "}
+        <span className="font-semibold text-amber-200">{inviter}&apos;s table</span> at exactly this
+        point — same squares, same turn.
+      </p>
 
       <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-sm leading-relaxed text-zinc-200">
         {shareText}
@@ -186,17 +172,17 @@ export function GameShare({ moves, best, won, total }: Props) {
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={onShare}
-          className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow transition hover:-translate-y-0.5 hover:bg-zinc-100"
+          onClick={onInvite}
+          className="rounded-full bg-gradient-to-b from-amber-200 to-amber-400 px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow transition hover:-translate-y-0.5 hover:from-amber-100 hover:to-amber-300"
         >
-          📤 Share my run
+          🔗 Invite a player
         </button>
         <button
           type="button"
-          onClick={onChallenge}
+          onClick={onCopyLink}
           className="rounded-full border border-white/15 bg-zinc-900/60 px-5 py-2.5 text-sm font-semibold text-zinc-100 backdrop-blur-md transition hover:-translate-y-0.5 hover:border-white/30"
         >
-          🥊 Challenge a friend
+          📋 Copy link only
         </button>
       </div>
 
@@ -205,8 +191,8 @@ export function GameShare({ moves, best, won, total }: Props) {
       </p>
 
       <p className="mt-1 text-xs text-zinc-500">
-        One glyph per roll: 🟥 a move, 🪜 a ladder up, 🐍 a snake down. The challenge link dares a
-        friend to beat square {target}.
+        The link carries the whole game. Whoever opens it can keep rolling and send the link back —
+        one device per turn. One glyph per roll: 🟥 a move, 🪜 a ladder up, 🐍 a snake down.
       </p>
     </div>
   );
